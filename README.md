@@ -4,18 +4,19 @@ This project provides a fully containerized, secure, and unified Model Context P
 
 ## Architecture
 
-The stack consists of three primary services running in isolated Docker containers:
+The stack consists of four primary services running in isolated Docker containers:
 
 1. **Unified Nginx Proxy**: Acts as a central gateway. It routes traffic based on the URL path.
 2. **Context7 MCP Server**: Provides documentation and code context.
-3. **SearXNG MCP Server**: Provides web search capabilities.
+3. **GitHub MCP Server**: Provides GitHub tools over MCP with OAuth support.
+4. **Lightweight MCP Aggregation Gateway**: Exposes a single `/mcp` endpoint and aggregates tools from downstream MCP servers.
 
 ## Key Features
 
 - **Zero Port Exposure**: All port numbers are abstracted into the `.env` file for maximum security and flexibility.
 - **Dynamic Configuration**: Uses `nginx.conf.template` to automatically inject environment variables at startup.
 - **Zero Docker Socket Dependency**: The proxy does not require `/var/run/docker.sock`, significantly improving security.
-- **Unified Access**: Both MCP servers are aggregated behind a single entry point.
+- **Unified Access**: A single MCP endpoint (`/mcp`) exposes tools from multiple downstream servers.
 - **Hardened Security**:
   - Containers run with `read_only: true` filesystems.
   - Capabilities are dropped (`cap_drop: ALL`).
@@ -38,6 +39,7 @@ The stack consists of three primary services running in isolated Docker containe
 
    The stack now ships with sensible defaults in `.env`, so no configuration is required for local startup.
    Only set `CONTEXT7_API_KEY` if your Context7 provider requires one.
+   GitHub MCP is configured for OAuth by default; keep `GITHUB_PERSONAL_ACCESS_TOKEN` empty unless you explicitly want PAT mode.
 
 2. **Verify the services:**
    ```bash
@@ -51,7 +53,11 @@ The stack consists of three primary services running in isolated Docker containe
 Zed is already configured to use the following endpoints:
 
 - **Context7**: `http://localhost:${GATEWAY_PORT}/context7/mcp`
-- **SearXNG**: `http://localhost:${GATEWAY_PORT}/searxng/mcp`
+- **GitHub**: `http://localhost:${GATEWAY_PORT}/github/mcp`
+- **Unified Gateway (recommended)**: `http://localhost:${GATEWAY_PORT}/mcp`
+
+When using the unified gateway endpoint, tools are namespaced as `<server>__<tool>` (for example `context7__resolve-library-id`).
+GitHub-backed tool calls use OAuth challenge flow; your MCP client should prompt once and then reuse the token.
 
 You can verify these settings in your Zed `settings.json` file (`cmd+,`).
 
@@ -59,6 +65,7 @@ You can verify these settings in your Zed `settings.json` file (`cmd+,`).
 
 - **`docker-compose.yml`**: The main orchestration file. Uses environment variables for all network settings.
 - **`nginx.conf.template`**: The routing template that dynamically configures the proxy.
+- **`gateway/server.ts`**: Lightweight MCP aggregation service used by `/mcp`.
 - **`.env`**: **The only place** where secrets, URLs, and port numbers are stored.
 - **`.env.example`**: Starter defaults for local setup.
 

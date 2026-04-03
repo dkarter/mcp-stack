@@ -9,6 +9,14 @@ upstream context7_backend {
     server context7:${INTERNAL_PORT};
 }
 
+upstream github_backend {
+    server github:${GITHUB_MCP_INTERNAL_PORT};
+}
+
+upstream gateway_backend {
+    server gateway:${MCP_GATEWAY_INTERNAL_PORT};
+}
+
 # upstream searxng_backend {
 #     server searxng:${INTERNAL_PORT};
 # }
@@ -16,11 +24,39 @@ upstream context7_backend {
 server {
     listen ${PROXY_INTERNAL_PORT};
 
+    # OAuth metadata for unified gateway
+    location = /.well-known/oauth-protected-resource/mcp {
+        proxy_pass http://gateway_backend/.well-known/oauth-protected-resource/mcp;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # Unified MCP gateway endpoint
+    location = /mcp {
+        proxy_pass http://gateway_backend/mcp;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
     # Context7 Routing
     location /context7/ {
         proxy_pass http://context7_backend/;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # GitHub MCP Routing
+    location /github/ {
+        proxy_pass http://github_backend/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
     }
 

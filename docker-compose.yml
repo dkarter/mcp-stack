@@ -29,6 +29,63 @@ services:
     networks:
       - mcp_net
 
+  # GitHub MCP Server (HTTP)
+  github:
+    image: ghcr.io/github/github-mcp-server:latest
+    command: ['http', '--port', '${GITHUB_MCP_INTERNAL_PORT:-8082}']
+    restart: unless-stopped
+    ports:
+      - '${GITHUB_MCP_EXT_PORT:-8048}:${GITHUB_MCP_INTERNAL_PORT:-8082}'
+    environment:
+      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN:-}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=128m,noexec
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    healthcheck:
+      test: ['CMD', '/server/github-mcp-server', '--version']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mcp_net
+
+  gateway:
+    build:
+      context: ./gateway
+    restart: unless-stopped
+    ports:
+      - '${MCP_GATEWAY_EXT_PORT:-8049}:${MCP_GATEWAY_INTERNAL_PORT:-8090}'
+    environment:
+      - PORT=${MCP_GATEWAY_INTERNAL_PORT:-8090}
+      - MCP_UPSTREAMS=context7=http://context7:${INTERNAL_PORT:-8000}/mcp,github=http://github:${GITHUB_MCP_INTERNAL_PORT:-8082}/mcp
+      - MCP_OAUTH_METADATA_SOURCE=http://github:${GITHUB_MCP_INTERNAL_PORT:-8082}/.well-known/oauth-protected-resource/mcp
+      - UPSTREAM_TIMEOUT=20
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=64m,noexec
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:${MCP_GATEWAY_INTERNAL_PORT:-8090}/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      context7:
+        condition: service_healthy
+      github:
+        condition: service_healthy
+    networks:
+      - mcp_net
+
   # # SearXNG MCP Server (HTTP)
   # searxng:
   #   image: isokoliuk/mcp-searxng:latest
@@ -61,12 +118,18 @@ services:
     ports:
       - '${BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8080}:${PROXY_INTERNAL_PORT:-8080}'
     environment:
+      - MCP_GATEWAY_INTERNAL_PORT=${MCP_GATEWAY_INTERNAL_PORT:-8090}
       - INTERNAL_PORT=${INTERNAL_PORT:-8000}
+      - GITHUB_MCP_INTERNAL_PORT=${GITHUB_MCP_INTERNAL_PORT:-8082}
       - PROXY_INTERNAL_PORT=${PROXY_INTERNAL_PORT:-8080}
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
     depends_on:
       context7:
+        condition: service_healthy
+      github:
+        condition: service_healthy
+      gateway:
         condition: service_healthy
     restart: unless-stopped
     networks:
