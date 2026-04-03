@@ -6,7 +6,7 @@ services:
   # Context7 MCP Server (HTTP)
   context7:
     # should check if I can get this to work 	mcp/context7
-    image: acuvity/mcp-server-context-7:latest
+    image: mcp/context7:latest
     restart: unless-stopped
     ports:
       - '${CONTEXT7_EXT_PORT:-8047}:${INTERNAL_PORT:-8000}'
@@ -22,7 +22,7 @@ services:
       - no-new-privileges:true
     mem_limit: 1g
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:${CONTEXT7_HEALTH_PORT:-8080}/']
+      test: ['CMD-SHELL', 'nc -z -v localhost ${CONTEXT7_HEALTH_PORT:-8000} >/dev/null 2>&1']
       interval: 5s
       timeout: 5s
       retries: 5
