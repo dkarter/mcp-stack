@@ -14,9 +14,9 @@ http {
         server context7:${INTERNAL_PORT};
     }
 
-    upstream searxng_backend {
-        server searxng:${INTERNAL_PORT};
-    }
+    # upstream searxng_backend {
+    #     server searxng:${INTERNAL_PORT};
+    # }
 
     server {
         listen ${PROXY_INTERNAL_PORT};
@@ -29,12 +29,12 @@ http {
             proxy_read_timeout 300s;
         }
 
-        # SearXNG Routing
-        location /searxng/ {
-            proxy_pass http://searxng_backend/;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_read_timeout 300s;
-        }
+        # # SearXNG Routing
+        # location /searxng/ {
+        #     proxy_pass http://searxng_backend/;
+        #     proxy_set_header Host $host;
+        #     proxy_set_header X-Real-IP $remote_addr;
+        #     proxy_read_timeout 300s;
+        # }
     }
 }

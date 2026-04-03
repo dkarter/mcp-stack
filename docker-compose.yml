@@ -5,10 +5,11 @@
 services:
   # Context7 MCP Server (HTTP)
   context7:
+    # should check if I can get this to work 	mcp/context7
     image: acuvity/mcp-server-context-7:latest
     restart: unless-stopped
     ports:
-      - "${CONTEXT7_EXT_PORT}:${INTERNAL_PORT}"
+      - '${CONTEXT7_EXT_PORT}:${INTERNAL_PORT}'
     environment:
       - PORT=${INTERNAL_PORT}
       - CONTEXT7_API_KEY=${CONTEXT7_API_KEY}
@@ -21,44 +22,44 @@ services:
       - no-new-privileges:true
     mem_limit: 1g
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:${CONTEXT7_HEALTH_PORT}/"]
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:${CONTEXT7_HEALTH_PORT}/']
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - mcp_net
 
-  # SearXNG MCP Server (HTTP)
-  searxng:
-    image: isokoliuk/mcp-searxng:latest
-    restart: unless-stopped
-    ports:
-      - "${SEARXNG_EXT_PORT}:${INTERNAL_PORT}"
-    environment:
-      - SEARXNG_URL=${SEARXNG_URL}
-      - TZ=Europe/Berlin
-      - MCP_HTTP_PORT=${INTERNAL_PORT}
-    read_only: true
-    tmpfs:
-      - /tmp:rw,size=128m,noexec
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 512m
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:${INTERNAL_PORT}/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - mcp_net
-
+  # # SearXNG MCP Server (HTTP)
+  # searxng:
+  #   image: isokoliuk/mcp-searxng:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${SEARXNG_EXT_PORT}:${INTERNAL_PORT}"
+  #   environment:
+  #     - SEARXNG_URL=${SEARXNG_URL}
+  #     - TZ=Europe/Berlin
+  #     - MCP_HTTP_PORT=${INTERNAL_PORT}
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp:rw,size=128m,noexec
+  #   cap_drop:
+  #     - ALL
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   mem_limit: 512m
+  #   healthcheck:
+  #     test: ["CMD", "wget", "-qO-", "http://localhost:${INTERNAL_PORT}/health"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - mcp_net
+  #
   # Unified Proxy (Nginx)
   proxy:
     image: nginx:alpine
     ports:
-      - "${BIND_ADDRESS}:${GATEWAY_PORT}:${PROXY_INTERNAL_PORT}"
+      - '${BIND_ADDRESS}:${GATEWAY_PORT}:${PROXY_INTERNAL_PORT}'
     environment:
       - INTERNAL_PORT=${INTERNAL_PORT}
       - PROXY_INTERNAL_PORT=${PROXY_INTERNAL_PORT}
