@@ -6,61 +6,63 @@ This project provides a fully containerized, secure, and unified Model Context P
 
 The stack consists of three primary services running in isolated Docker containers:
 
-1.  **Unified Nginx Proxy**: Acts as a central gateway. It routes traffic based on the URL path.
-2.  **Context7 MCP Server**: Provides documentation and code context.
-3.  **SearXNG MCP Server**: Provides web search capabilities.
+1. **Unified Nginx Proxy**: Acts as a central gateway. It routes traffic based on the URL path.
+2. **Context7 MCP Server**: Provides documentation and code context.
+3. **SearXNG MCP Server**: Provides web search capabilities.
 
 ## Key Features
 
-*   **Zero Port Exposure**: All port numbers are abstracted into the `.env` file for maximum security and flexibility.
-*   **Dynamic Configuration**: Uses `nginx.conf.template` to automatically inject environment variables at startup.
-*   **Zero Docker Socket Dependency**: The proxy does not require `/var/run/docker.sock`, significantly improving security.
-*   **Unified Access**: Both MCP servers are aggregated behind a single entry point.
-*   **Hardened Security**:
-    *   Containers run with `read_only: true` filesystems.
-    *   Capabilities are dropped (`cap_drop: ALL`).
-    *   No privilege escalation allowed (`no-new-privileges: true`).
-    *   Internal servers are not exposed to the host/internet; only the Proxy is reachable.
+- **Zero Port Exposure**: All port numbers are abstracted into the `.env` file for maximum security and flexibility.
+- **Dynamic Configuration**: Uses `nginx.conf.template` to automatically inject environment variables at startup.
+- **Zero Docker Socket Dependency**: The proxy does not require `/var/run/docker.sock`, significantly improving security.
+- **Unified Access**: Both MCP servers are aggregated behind a single entry point.
+- **Hardened Security**:
+  - Containers run with `read_only: true` filesystems.
+  - Capabilities are dropped (`cap_drop: ALL`).
+  - No privilege escalation allowed (`no-new-privileges: true`).
+  - Internal servers are not exposed to the host/internet; only the Proxy is reachable.
 
 ## Getting Started
 
 ### Prerequisites
-*   [OrbStack](https://orbstack.dev/) (or Docker Desktop)
-*   An Olares instance for SearXNG (configured in `.env`)
+
+- [OrbStack](https://orbstack.dev/) (or Docker Desktop)
+- An Olares instance for SearXNG (configured in `.env`)
 
 ### Installation
 
-1.  **Start the stack:**
-    ```bash
-    docker-compose up -d
-    ```
+1. **Start the stack:**
+   ```bash
+   docker-compose up -d
+   ```
 
-    The stack now ships with sensible defaults in `.env`, so no configuration is required for local startup.
-    Only set `CONTEXT7_API_KEY` if your Context7 provider requires one.
+   The stack now ships with sensible defaults in `.env`, so no configuration is required for local startup.
+   Only set `CONTEXT7_API_KEY` if your Context7 provider requires one.
 
-2.  **Verify the services:**
-    ```bash
-    docker-compose ps
-    ```
+2. **Verify the services:**
+   ```bash
+   docker-compose ps
+   ```
 
 ## Connecting to Clients
 
 ### Zed
+
 Zed is already configured to use the following endpoints:
 
-*   **Context7**: `http://localhost:${GATEWAY_PORT}/context7/mcp`
-*   **SearXNG**: `http://localhost:${GATEWAY_PORT}/searxng/mcp`
+- **Context7**: `http://localhost:${GATEWAY_PORT}/context7/mcp`
+- **SearXNG**: `http://localhost:${GATEWAY_PORT}/searxng/mcp`
 
 You can verify these settings in your Zed `settings.json` file (`cmd+,`).
 
 ## Configuration Files
 
-*   **`docker-compose.yml`**: The main orchestration file. Uses environment variables for all network settings.
-*   **`nginx.conf.template`**: The routing template that dynamically configures the proxy.
-*   **`.env`**: **The only place** where secrets, URLs, and port numbers are stored.
-*   **`.env.example`**: Starter defaults for local setup.
+- **`docker-compose.yml`**: The main orchestration file. Uses environment variables for all network settings.
+- **`nginx.conf.template`**: The routing template that dynamically configures the proxy.
+- **`.env`**: **The only place** where secrets, URLs, and port numbers are stored.
+- **`.env.example`**: Starter defaults for local setup.
 
 ## Troubleshooting
 
-*   **Port Busy**: If the `${GATEWAY_PORT}` is already in use, simply change it in the `.env` file and restart.
-*   **Configuration Sync**: If you change ports in `.env`, run `docker-compose up -d` to regenerate the proxy configuration.
+- **Port Busy**: If the `${GATEWAY_PORT}` is already in use, simply change it in the `.env` file and restart.
+- **Configuration Sync**: If you change ports in `.env`, run `docker-compose up -d` to regenerate the proxy configuration.
