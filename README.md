@@ -35,6 +35,9 @@ The stack consists of three primary services running in isolated Docker containe
     docker-compose up -d
     ```
 
+    The stack now ships with sensible defaults in `.env`, so no configuration is required for local startup.
+    Only set `CONTEXT7_API_KEY` if your Context7 provider requires one.
+
 2.  **Verify the services:**
     ```bash
     docker-compose ps
@@ -55,6 +58,7 @@ You can verify these settings in your Zed `settings.json` file (`cmd+,`).
 *   **`docker-compose.yml`**: The main orchestration file. Uses environment variables for all network settings.
 *   **`nginx.conf.template`**: The routing template that dynamically configures the proxy.
 *   **`.env`**: **The only place** where secrets, URLs, and port numbers are stored.
+*   **`.env.example`**: Starter defaults for local setup.
 
 ## Troubleshooting
 

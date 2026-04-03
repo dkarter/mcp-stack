@@ -9,10 +9,10 @@ services:
     image: acuvity/mcp-server-context-7:latest
     restart: unless-stopped
     ports:
-      - '${CONTEXT7_EXT_PORT}:${INTERNAL_PORT}'
+      - '${CONTEXT7_EXT_PORT:-8047}:${INTERNAL_PORT:-8000}'
     environment:
-      - PORT=${INTERNAL_PORT}
-      - CONTEXT7_API_KEY=${CONTEXT7_API_KEY}
+      - PORT=${INTERNAL_PORT:-8000}
+      - CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}
     read_only: true
     tmpfs:
       - /tmp:rw,size=256m,noexec
@@ -22,7 +22,7 @@ services:
       - no-new-privileges:true
     mem_limit: 1g
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:${CONTEXT7_HEALTH_PORT}/']
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:${CONTEXT7_HEALTH_PORT:-8080}/']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -59,16 +59,14 @@ services:
   proxy:
     image: nginx:alpine
     ports:
-      - '${BIND_ADDRESS}:${GATEWAY_PORT}:${PROXY_INTERNAL_PORT}'
+      - '${BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8080}:${PROXY_INTERNAL_PORT:-8080}'
     environment:
-      - INTERNAL_PORT=${INTERNAL_PORT}
-      - PROXY_INTERNAL_PORT=${PROXY_INTERNAL_PORT}
+      - INTERNAL_PORT=${INTERNAL_PORT:-8000}
+      - PROXY_INTERNAL_PORT=${PROXY_INTERNAL_PORT:-8080}
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
     depends_on:
       context7:
-        condition: service_healthy
-      searxng:
         condition: service_healthy
     restart: unless-stopped
     networks:
