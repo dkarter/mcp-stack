@@ -59,8 +59,11 @@ services:
     image: nginx:alpine
     ports:
       - "${BIND_ADDRESS}:${GATEWAY_PORT}:${PROXY_INTERNAL_PORT}"
+    environment:
+      - INTERNAL_PORT=${INTERNAL_PORT}
+      - PROXY_INTERNAL_PORT=${PROXY_INTERNAL_PORT}
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
     depends_on:
       context7:
         condition: service_healthy
