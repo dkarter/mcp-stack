@@ -1,5 +1,6 @@
 [tools]
 "github:crate-ci/committed" = "latest"
+bun = "latest"
 dprint = "latest"
 fnox = "latest"
 gitleaks = "latest"
@@ -16,3 +17,15 @@ run = "dprint fmt"
 [tasks.fmt-check]
 description = "Checks formatting and fails on differences"
 run = "dprint check"
+
+[tasks.gateway-local]
+description = "Runs gateway locally using fnox secrets"
+run = "fnox exec --if-missing warn -- env SECRET_BACKEND='fnox' MCP_UPSTREAMS='context7=http://127.0.0.1:8047/mcp,github=http://127.0.0.1:8048/mcp,e2b=http://127.0.0.1:8050/mcp' GATEWAY_DB_PATH='./gateway/gateway.db' bun gateway/server.ts"
+
+[tasks.stack-up]
+description = "Starts MCP containers and proxy"
+run = "fnox exec --if-missing warn -- docker compose up -d context7 github e2b proxy"
+
+[tasks.stack-down]
+description = "Stops MCP containers and proxy"
+run = "docker compose down"

@@ -13,8 +13,12 @@ upstream github_backend {
     server github:${GITHUB_MCP_INTERNAL_PORT};
 }
 
+upstream e2b_backend {
+    server e2b:${E2B_MCP_INTERNAL_PORT};
+}
+
 upstream gateway_backend {
-    server gateway:${MCP_GATEWAY_INTERNAL_PORT};
+    server ${GATEWAY_HOST}:${MCP_GATEWAY_INTERNAL_PORT};
 }
 
 # upstream searxng_backend {
@@ -42,6 +46,39 @@ server {
         proxy_read_timeout 300s;
     }
 
+    # Registry UI
+    location = /registry {
+        proxy_pass http://gateway_backend/registry;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    location = /registry/ui.js {
+        proxy_pass http://gateway_backend/registry/ui.js;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    location /registry/api/ {
+        proxy_pass http://gateway_backend/registry/api/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    location /registry/oauth/ {
+        proxy_pass http://gateway_backend/registry/oauth/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
     # Context7 Routing
     location /context7/ {
         proxy_pass http://context7_backend/;
@@ -54,6 +91,15 @@ server {
     # GitHub MCP Routing
     location /github/ {
         proxy_pass http://github_backend/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # E2B MCP Routing
+    location /e2b/ {
+        proxy_pass http://e2b_backend/;
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
