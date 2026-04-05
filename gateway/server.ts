@@ -1079,7 +1079,7 @@ const serveOptions: Bun.Serve = {
       return plainResponse(200, "ok");
     }
 
-    if (req.method === "GET" && url.pathname === "/registry") {
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/registry")) {
       return new Response(registryPage(), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
