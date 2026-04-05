@@ -1,3 +1,5 @@
+namespace = "mcp-gateway"
+
 [daemons.stack]
 run = "fnox exec --if-missing warn -- docker compose up"
 ready_delay = 2
