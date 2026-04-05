@@ -31,6 +31,8 @@ const fnoxCwd = process.env.FNOX_CWD ?? process.cwd();
 const secretBackendPref = (process.env.SECRET_BACKEND ?? "fnox").toLowerCase();
 const registryInspectTimeoutMs = Number(process.env.REGISTRY_INSPECT_TIMEOUT ?? "4") * 1000;
 const registryCacheTtlMs = Number(process.env.REGISTRY_CACHE_TTL ?? "15") * 1000;
+const tlsCertPath = process.env.TLS_CERT_PATH ?? "";
+const tlsKeyPath = process.env.TLS_KEY_PATH ?? "";
 const port = Number(process.env.PORT ?? "8090");
 const registryUiPath = new URL("./ui/registry.tsx", import.meta.url);
 const registryUiTranspiler = new Bun.Transpiler({
@@ -145,6 +147,7 @@ const clearTokenStmt = db.query("DELETE FROM upstream_tokens WHERE upstream_name
 const gatewaySessions = new Map<string, Map<string, string>>();
 const inspectionCache = new Map<string, { data: Json; updatedAt: number }>();
 const inspectionInFlight = new Set<string>();
+const registrySockets = new Set<ServerWebSocket<{ initialState?: Json[] }>>();
 const oauthState = new Map<string, {
   upstreamName: string;
   tokenEndpoint: string;
@@ -161,14 +164,16 @@ function listEnabledUpstreams(): Upstream[] {
 
 function gatewayBase(req: Request): string {
   const host = req.headers.get("host") ?? "127.0.0.1";
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  const proto = req.headers.get("x-forwarded-proto") ?? new URL(req.url).protocol.replace(":", "");
   return `${proto}://${host}`;
 }
 
+function gatewayMetadataPath(upstreamName: string): string {
+  return `/.well-known/oauth-protected-resource/mcp?upstream=${encodeURIComponent(upstreamName)}`;
+}
+
 function gatewayMetadataUrl(req: Request, upstreamName: string): string {
-  return `${gatewayBase(req)}/.well-known/oauth-protected-resource/mcp?upstream=${
-    encodeURIComponent(upstreamName)
-  }`;
+  return `${gatewayBase(req)}${gatewayMetadataPath(upstreamName)}`;
 }
 
 function defaultUpstreamState(req: Request, upstream: Upstream): Json {
@@ -188,16 +193,59 @@ function defaultUpstreamState(req: Request, upstream: Upstream): Json {
   };
 }
 
+function defaultUpstreamStateNoReq(upstream: Upstream): Json {
+  return {
+    name: upstream.name,
+    url: upstream.url,
+    status: "checking",
+    error: "inspection pending",
+    resource_metadata_url: gatewayMetadataPath(upstream.name),
+    has_secret: hasStoredSecret(upstream.name),
+    tool_count: 0,
+    resource_count: 0,
+    prompt_count: 0,
+    tools: [],
+    resources: [],
+    prompts: [],
+  };
+}
+
 function mergeHasSecret(state: Json, hasSecret: boolean): Json {
   return { ...state, has_secret: hasSecret };
+}
+
+function broadcastRegistry(payload: Json): void {
+  const message = JSON.stringify(payload);
+  for (const ws of registrySockets) {
+    try {
+      ws.send(message);
+    } catch {
+      // Ignore per-socket send errors.
+    }
+  }
+}
+
+function currentUpstreamStateForBroadcast(upstreamName: string): Json | null {
+  const upstream = getUpstreamStmt.get(upstreamName);
+  if (!upstream) return null;
+  const cached = inspectionCache.get(upstreamName)?.data ?? defaultUpstreamStateNoReq(upstream);
+  return mergeHasSecret(cached, hasStoredSecret(upstreamName));
+}
+
+function broadcastUpstreamState(upstreamName: string): void {
+  const upstream = currentUpstreamStateForBroadcast(upstreamName);
+  if (!upstream) return;
+  broadcastRegistry({ type: "upstream", upstream });
 }
 
 function scheduleInspect(req: Request, upstream: Upstream): void {
   if (inspectionInFlight.has(upstream.name)) return;
   inspectionInFlight.add(upstream.name);
+  broadcastUpstreamState(upstream.name);
   void inspectWithTimeout(req, upstream)
     .then((data) => {
       inspectionCache.set(upstream.name, { data, updatedAt: Date.now() });
+      broadcastUpstreamState(upstream.name);
     })
     .finally(() => {
       inspectionInFlight.delete(upstream.name);
@@ -1021,7 +1069,7 @@ async function handleMcp(req: Request): Promise<Response> {
   });
 }
 
-const server = Bun.serve({
+const serveOptions: Bun.Serve = {
   port,
   idleTimeout: 60,
   async fetch(req): Promise<Response> {
@@ -1035,6 +1083,15 @@ const server = Bun.serve({
       return new Response(registryPage(), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
+    }
+
+    if (req.method === "GET" && url.pathname === "/registry/ws") {
+      const upstreams = listEnabledUpstreams();
+      const snapshot = registryStateSnapshot(req, upstreams);
+      if (server.upgrade(req, { data: { initialState: snapshot } })) {
+        return new Response(null);
+      }
+      return plainResponse(400, "websocket upgrade failed");
     }
 
     if (req.method === "GET" && url.pathname === "/registry/oauth/callback") {
@@ -1104,7 +1161,10 @@ const server = Bun.serve({
       }
       upsertUpstreamStmt.run(name, mcpUrl, metadata || null);
       const upstream = getUpstreamStmt.get(name);
-      if (upstream) scheduleInspect(req, upstream);
+      if (upstream) {
+        broadcastUpstreamState(name);
+        scheduleInspect(req, upstream);
+      }
       return jsonResponse(200, { ok: true });
     }
 
@@ -1113,6 +1173,7 @@ const server = Bun.serve({
     ) {
       const name = decodeURIComponent(url.pathname.split("/")[4] || "");
       setEnabledStmt.run(0, name);
+      broadcastRegistry({ type: "removed", name });
       return jsonResponse(200, { ok: true });
     }
 
@@ -1123,6 +1184,7 @@ const server = Bun.serve({
       deleteUpstreamStmt.run(name);
       inspectionCache.delete(name);
       inspectionInFlight.delete(name);
+      broadcastRegistry({ type: "removed", name });
       return jsonResponse(200, { ok: true });
     }
 
@@ -1179,6 +1241,7 @@ const server = Bun.serve({
       if (!token) return jsonResponse(400, { error: "token is required" });
       const saved = setSecretInKeychain(name, token);
       if (!saved.ok) return jsonResponse(500, { error: saved.error });
+      broadcastUpstreamState(name);
       scheduleInspect(req, upstream);
       return jsonResponse(200, { ok: true });
     }
@@ -1191,6 +1254,7 @@ const server = Bun.serve({
       if (!upstream) return jsonResponse(404, { error: "unknown upstream" });
       const cleared = clearSecretFromKeychain(name);
       if (!cleared.ok) return jsonResponse(500, { error: cleared.error });
+      broadcastUpstreamState(name);
       scheduleInspect(req, upstream);
       return jsonResponse(200, { ok: true });
     }
@@ -1219,6 +1283,29 @@ const server = Bun.serve({
 
     return plainResponse(404, "Not found");
   },
-});
+  websocket: {
+    open(ws) {
+      registrySockets.add(ws);
+      const initialState = ws.data.initialState;
+      if (initialState) {
+        ws.send(JSON.stringify({ type: "state", upstreams: initialState }));
+      }
+    },
+    close(ws) {
+      registrySockets.delete(ws);
+    },
+    message() {
+      // No-op: server push only.
+    },
+  },
+};
+
+if (tlsCertPath && tlsKeyPath) {
+  const cert = await Bun.file(tlsCertPath).text();
+  const key = await Bun.file(tlsKeyPath).text();
+  serveOptions.tls = { cert, key };
+}
+
+const server = Bun.serve(serveOptions);
 
 console.log(`Gateway listening on :${server.port}`);

@@ -19,6 +19,7 @@ The stack includes these primary services:
 - **Zero Docker Socket Dependency**: The proxy does not require `/var/run/docker.sock`, significantly improving security.
 - **Unified Access**: A single MCP endpoint (`/mcp`) exposes tools from multiple downstream servers.
 - **Registry UI**: A local UI at `/registry` to discover upstream MCPs, inspect tools/resources/prompts, and trigger auth challenges.
+- **Live Registry Updates**: Registry state updates stream over WebSocket (`/registry/ws`) so auth/disconnect/inspect changes appear immediately.
 - **Hardened Security**:
   - Containers run with `read_only: true` filesystems.
   - Capabilities are dropped (`cap_drop: ALL`).
@@ -54,8 +55,24 @@ The stack includes these primary services:
 
    Keep this running in a separate terminal.
 
-   The stack ships with sensible non-secret defaults in `.env`.
-   Add secrets to fnox as needed (`CONTEXT7_API_KEY`, `E2B_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`).
+### Local HTTPS mode (for clients that require HTTPS)
+
+1. Generate local certificates (requires `mkcert`):
+   ```bash
+   mise run cert-local
+   ```
+2. Run the gateway with TLS:
+   ```bash
+   mise run gateway-local-https
+   ```
+
+This exposes HTTPS endpoints on `https://localhost:8443`:
+
+- `https://localhost:8443/mcp`
+- `https://localhost:8443/registry`
+
+The stack ships with sensible non-secret defaults in `.env`.
+Add secrets to fnox as needed (`CONTEXT7_API_KEY`, `E2B_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`).
 
 3. **Verify the services:**
    ```bash
@@ -113,7 +130,7 @@ You can verify these settings in your Zed `settings.json` file (`cmd+,`).
 - **`docker-compose.yml`**: The main orchestration file. Uses environment variables for all network settings.
 - **`nginx.conf.template`**: The routing template that dynamically configures the proxy.
 - **`gateway/server.ts`**: Lightweight MCP aggregation service used by `/mcp` and `/registry`.
-- **`mise.toml`**: Includes `stack-up`, `stack-down`, and `gateway-local` tasks for the host-first workflow.
+- **`mise.toml`**: Includes `stack-up`, `stack-down`, `gateway-local`, `gateway-local-https`, and `cert-local` tasks.
 - **`e2b/http-adapter.js`**: HTTP adapter that bridges `mcp/e2b` (stdio) to `/mcp`.
 - **`.env`**: **The only place** where secrets, URLs, and port numbers are stored.
 - **`.env.example`**: Starter defaults for local setup.

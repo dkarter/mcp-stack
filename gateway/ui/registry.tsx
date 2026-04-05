@@ -20,6 +20,11 @@ type RegistryUpstream = {
   tools?: RegistryTool[];
 };
 
+type RegistryWsMessage =
+  | { type: "state"; upstreams: RegistryUpstream[] }
+  | { type: "upstream"; upstream: RegistryUpstream }
+  | { type: "removed"; name: string };
+
 type CardProps = {
   upstream: RegistryUpstream;
   onRefresh: (name: string) => Promise<void>;
@@ -90,6 +95,21 @@ function App() {
   const [url, setUrl] = useState("");
   const [oauthMetadataUrl, setOauthMetadataUrl] = useState("");
 
+  const applySnapshot = useCallback((next: RegistryUpstream[]) => {
+    setUpstreams(next);
+    localStorage.setItem(cacheKey, JSON.stringify(next));
+  }, []);
+
+  const upsertUpstream = useCallback((next: RegistryUpstream) => {
+    setUpstreams((prev) => {
+      const i = prev.findIndex((upstream) => upstream.name === next.name);
+      if (i === -1) return [...prev, next];
+      const updated = [...prev];
+      updated[i] = next;
+      return updated;
+    });
+  }, []);
+
   const readJson = useCallback(async (res: Response): Promise<JsonRecord> => {
     try {
       return (await res.json()) as JsonRecord;
@@ -104,12 +124,11 @@ function App() {
       const res = await fetch("/registry/api/state");
       const data = await readJson(res);
       const next = Array.isArray(data.upstreams) ? (data.upstreams as RegistryUpstream[]) : [];
-      setUpstreams(next);
-      localStorage.setItem(cacheKey, JSON.stringify(next));
+      applySnapshot(next);
     } finally {
       setLoading(false);
     }
-  }, [readJson]);
+  }, [applySnapshot, readJson]);
 
   useEffect(() => {
     try {
@@ -135,10 +154,60 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const id = setInterval(() => {
+    localStorage.setItem(cacheKey, JSON.stringify(upstreams));
+  }, [upstreams]);
+
+  useEffect(() => {
+    let closed = false;
+    let socket: WebSocket | null = null;
+    let retryTimer: number | null = null;
+
+    const connect = () => {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${proto}//${window.location.host}/registry/ws`);
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(String(event.data)) as RegistryWsMessage;
+          if (message.type === "state" && Array.isArray(message.upstreams)) {
+            applySnapshot(message.upstreams);
+            setLoading(false);
+            return;
+          }
+          if (message.type === "upstream" && message.upstream) {
+            upsertUpstream(message.upstream);
+            return;
+          }
+          if (message.type === "removed" && message.name) {
+            setUpstreams((prev) => prev.filter((upstream) => upstream.name !== message.name));
+          }
+        } catch {
+          // Ignore invalid websocket messages.
+        }
+      };
+
+      socket.onclose = () => {
+        if (closed) return;
+        retryTimer = window.setTimeout(connect, 1000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      closed = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    };
+  }, [applySnapshot, upsertUpstream]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
       void load();
-    }, 3000);
-    return () => clearInterval(id);
+    }, 30000);
+    return () => window.clearInterval(id);
   }, [load]);
 
   const refresh = useCallback(async (upstreamName: string) => {
