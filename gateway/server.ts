@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { fileURLToPath } from "node:url";
 
 type Json = Record<string, unknown>;
 
@@ -35,16 +36,7 @@ const tlsCertPath = process.env.TLS_CERT_PATH ?? "";
 const tlsKeyPath = process.env.TLS_KEY_PATH ?? "";
 const port = Number(process.env.PORT ?? "8090");
 const registryUiPath = new URL("./ui/registry.tsx", import.meta.url);
-const registryUiTranspiler = new Bun.Transpiler({
-  loader: "tsx",
-  tsconfig: {
-    compilerOptions: {
-      jsx: "react",
-      jsxFactory: "React.createElement",
-      jsxFragmentFactory: "React.Fragment",
-    },
-  },
-});
+const registryUiEntryPath = fileURLToPath(registryUiPath);
 
 const db = new Database(dbPath, { create: true });
 db.exec("PRAGMA foreign_keys = ON;");
@@ -491,6 +483,37 @@ function plainResponse(status: number, body: string, headers?: Headers): Respons
     }
   }
   return new Response(body, { status, headers: out });
+}
+
+function applyCors(req: Request, res: Response): Response {
+  const headers = new Headers(res.headers);
+  const origin = req.headers.get("origin") ?? "*";
+  headers.set("access-control-allow-origin", origin);
+  headers.set("vary", "origin");
+  headers.set("access-control-allow-methods", "POST, OPTIONS");
+  headers.set(
+    "access-control-allow-headers",
+    "content-type, mcp-session-id, authorization, accept",
+  );
+  headers.set("access-control-expose-headers", "mcp-session-id, www-authenticate");
+  return new Response(res.body, {
+    status: res.status,
+    headers,
+  });
+}
+
+function corsPreflight(req: Request): Response {
+  const origin = req.headers.get("origin") ?? "*";
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-origin": origin,
+      "vary": "origin",
+      "access-control-allow-methods": "POST, OPTIONS",
+      "access-control-allow-headers": "content-type, mcp-session-id, authorization, accept",
+      "access-control-max-age": "86400",
+    },
+  });
 }
 
 function registryPage(): string {
@@ -975,7 +998,10 @@ async function handleMcp(req: Request): Promise<Response> {
     const tools: Json[] = [];
     for (const upstream of upstreams) {
       const init = await ensureInitialized({ req, gatewaySessionId: sessionId, upstream });
-      if (!init.ok) return init.response;
+      if (!init.ok) {
+        console.warn(`[gateway] skipping ${upstream.name} for tools/list: initialize failed`);
+        continue;
+      }
 
       const upstreamSession = gatewaySessions.get(sessionId)?.get(upstream.name);
       const token = getSecretFromKeychain(upstream.name);
@@ -994,11 +1020,8 @@ async function handleMcp(req: Request): Promise<Response> {
       });
 
       if (result.status !== 200) {
-        return plainResponse(
-          result.status,
-          typeof result.body === "string" ? result.body : JSON.stringify(result.body),
-          result.headers,
-        );
+        console.warn(`[gateway] skipping ${upstream.name} for tools/list: status ${result.status}`);
+        continue;
       }
 
       const upstreamTools = (((result.body as Json).result as Json | undefined)?.tools as
@@ -1130,13 +1153,28 @@ const serveOptions: Bun.Serve = {
 
     if (req.method === "GET" && url.pathname === "/registry/ui.js") {
       try {
-        const source = await Bun.file(registryUiPath).text();
-        const js = registryUiTranspiler.transformSync(source);
+        const build = await Bun.build({
+          entrypoints: [registryUiEntryPath],
+          format: "esm",
+          target: "browser",
+          minify: false,
+          sourcemap: "none",
+        });
+        if (!build.success) {
+          const details = build.logs.map((log) => log.message).join("\n");
+          throw new Error(details || "build failed");
+        }
+        const artifact = build.outputs.find((output) => output.path.endsWith(".js"))
+          ?? build.outputs[0];
+        if (!artifact) {
+          throw new Error("no JS output produced");
+        }
+        const js = await artifact.text();
         return new Response(js, {
           headers: { "content-type": "application/javascript; charset=utf-8" },
         });
       } catch (error) {
-        return plainResponse(500, `failed to transpile /registry/ui.js: ${String(error)}`);
+        return plainResponse(500, `failed to bundle /registry/ui.js: ${String(error)}`);
       }
     }
 
@@ -1277,8 +1315,13 @@ const serveOptions: Bun.Serve = {
       });
     }
 
+    if (req.method === "OPTIONS" && url.pathname === "/mcp") {
+      return corsPreflight(req);
+    }
+
     if (req.method === "POST" && url.pathname === "/mcp") {
-      return handleMcp(req);
+      const response = await handleMcp(req);
+      return applyCors(req, response);
     }
 
     return plainResponse(404, "Not found");
