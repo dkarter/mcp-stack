@@ -1,5 +1,5 @@
 # ================================================
-# MCP Stack - Unified Proxy (Streamable HTTP)
+# MCP Stack - Backend MCP Services
 # ================================================
 
 services:
@@ -82,102 +82,6 @@ services:
     networks:
       - mcp_net
 
-  gateway:
-    profiles: ['docker-gateway']
-    build:
-      context: ./gateway
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    ports:
-      - '${MCP_GATEWAY_EXT_PORT:-8049}:${MCP_GATEWAY_INTERNAL_PORT:-8090}'
-    environment:
-      - PORT=${MCP_GATEWAY_INTERNAL_PORT:-8090}
-      - GATEWAY_DB_PATH=/data/gateway.db
-      - SECRET_BACKEND=${SECRET_BACKEND:-fnox}
-      - MCP_UPSTREAMS=context7=http://context7:${INTERNAL_PORT:-8000}/mcp,github=http://github:${GITHUB_MCP_INTERNAL_PORT:-8082}/mcp,e2b=http://e2b:${E2B_MCP_INTERNAL_PORT:-8083}/mcp
-      - UPSTREAM_TIMEOUT=20
-    read_only: true
-    volumes:
-      - gateway_data:/data
-    tmpfs:
-      - /tmp:rw,size=64m,noexec
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 256m
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:${MCP_GATEWAY_INTERNAL_PORT:-8090}/health']
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      context7:
-        condition: service_healthy
-      github:
-        condition: service_healthy
-      e2b:
-        condition: service_healthy
-    networks:
-      - mcp_net
-
-  # # SearXNG MCP Server (HTTP)
-  # searxng:
-  #   image: isokoliuk/mcp-searxng:latest
-  #   restart: unless-stopped
-  #   ports:
-  #     - "${SEARXNG_EXT_PORT}:${INTERNAL_PORT}"
-  #   environment:
-  #     - SEARXNG_URL=${SEARXNG_URL}
-  #     - TZ=Europe/Berlin
-  #     - MCP_HTTP_PORT=${INTERNAL_PORT}
-  #   read_only: true
-  #   tmpfs:
-  #     - /tmp:rw,size=128m,noexec
-  #   cap_drop:
-  #     - ALL
-  #   security_opt:
-  #     - no-new-privileges:true
-  #   mem_limit: 512m
-  #   healthcheck:
-  #     test: ["CMD", "wget", "-qO-", "http://localhost:${INTERNAL_PORT}/health"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
-  #   networks:
-  #     - mcp_net
-  #
-  # Unified Proxy (Nginx)
-  proxy:
-    image: nginx:alpine
-    ports:
-      - '${BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8080}:${PROXY_INTERNAL_PORT:-8080}'
-    environment:
-      - GATEWAY_HOST=${GATEWAY_HOST:-host.docker.internal}
-      - MCP_GATEWAY_INTERNAL_PORT=${MCP_GATEWAY_INTERNAL_PORT:-8090}
-      - INTERNAL_PORT=${INTERNAL_PORT:-8000}
-      - GITHUB_MCP_INTERNAL_PORT=${GITHUB_MCP_INTERNAL_PORT:-8082}
-      - E2B_MCP_INTERNAL_PORT=${E2B_MCP_INTERNAL_PORT:-8083}
-      - PROXY_INTERNAL_PORT=${PROXY_INTERNAL_PORT:-8080}
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    volumes:
-      - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
-    depends_on:
-      context7:
-        condition: service_healthy
-      github:
-        condition: service_healthy
-      e2b:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - mcp_net
-
 networks:
   mcp_net:
     driver: bridge
-
-volumes:
-  gateway_data:

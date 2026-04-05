@@ -1,12 +1,12 @@
 # Unified MCP Stack (OrbStack Optimized)
 
-This project provides a secure, unified Model Context Protocol (MCP) stack with a host-run lightweight aggregation gateway and an Nginx proxy in Docker.
+This project provides a secure, unified Model Context Protocol (MCP) stack with a host-run lightweight aggregation gateway and a host-run Caddy proxy.
 
 ## Architecture
 
 The stack includes these primary services:
 
-1. **Unified Nginx Proxy**: Acts as a central gateway. It routes traffic based on the URL path.
+1. **Unified Caddy Proxy (host)**: Acts as a central gateway. It routes traffic based on the URL path and serves local HTTPS.
 2. **Context7 MCP Server**: Provides documentation and code context.
 3. **GitHub MCP Server**: Provides GitHub tools over MCP with OAuth support.
 4. **E2B MCP Server**: Exposes E2B tools through a lightweight HTTP adapter.
@@ -15,7 +15,7 @@ The stack includes these primary services:
 ## Key Features
 
 - **Zero Port Exposure**: All port numbers are abstracted into the `.env` file for maximum security and flexibility.
-- **Dynamic Configuration**: Uses `nginx.conf.template` to automatically inject environment variables at startup.
+- **Dynamic Configuration**: Uses `Caddyfile` with environment placeholders.
 - **Zero Docker Socket Dependency**: The proxy does not require `/var/run/docker.sock`, significantly improving security.
 - **Unified Access**: A single MCP endpoint (`/mcp`) exposes tools from multiple downstream servers.
 - **Registry UI**: A local UI at `/registry` to discover upstream MCPs, inspect tools/resources/prompts, and trigger auth challenges.
@@ -24,7 +24,7 @@ The stack includes these primary services:
   - Containers run with `read_only: true` filesystems.
   - Capabilities are dropped (`cap_drop: ALL`).
   - No privilege escalation allowed (`no-new-privileges: true`).
-  - Internal servers are not exposed to the host/internet; only the Proxy is reachable.
+  - Internal servers are not exposed to the host/internet; only Caddy is reachable.
 
 ## Getting Started
 
@@ -41,40 +41,52 @@ The stack includes these primary services:
 
 ### Installation
 
-1. **Start MCP containers + proxy:**
+1. **Start everything with pitchfork:**
    ```bash
    mise run stack-up
    ```
 
-   This starts Context7, GitHub MCP, E2B, and Nginx proxy using `fnox exec`.
+   This starts Docker MCP backends (`context7`, `github`, `e2b`) and host daemons (`gateway`, `caddy`).
 
-2. **Start the gateway on host (default):**
+2. **Check daemon status:**
+   ```bash
+   mise run stack-status
+   ```
+
+   To stop everything later:
+   ```bash
+   mise run stack-down
+   ```
+
+3. **(Optional) Start the gateway only:**
    ```bash
    mise run gateway-local
    ```
 
-   Keep this running in a separate terminal.
-
 ### Local HTTPS mode (for clients that require HTTPS)
 
-1. Generate local certificates (requires `mkcert`):
-   ```bash
-   mise run cert-local
-   ```
-2. Run the gateway with TLS:
-   ```bash
-   mise run gateway-local-https
-   ```
+By default Caddy serves both HTTP and HTTPS on localhost:
 
-This exposes HTTPS endpoints on `https://localhost:8443`:
+- `http://localhost:${GATEWAY_PORT}`
+- `https://localhost:${GATEWAY_TLS_PORT}`
 
-- `https://localhost:8443/mcp`
-- `https://localhost:8443/registry`
+To trust Caddy's local CA in macOS keychains:
+
+```bash
+mise run caddy-trust-ca
+```
+
+Note: Caddy's auto-trust does not automatically update macOS host trust when run as an app daemon. The `caddy-trust-ca` task imports Caddy's generated root CA into macOS keychains so browsers/desktop apps trust `https://localhost:${GATEWAY_TLS_PORT}`.
+
+Then you can use trusted HTTPS endpoints like:
+
+- `https://localhost:${GATEWAY_TLS_PORT}/mcp`
+- `https://localhost:${GATEWAY_TLS_PORT}/registry`
 
 The stack ships with sensible non-secret defaults in `.env`.
 Add secrets to fnox as needed (`CONTEXT7_API_KEY`, `E2B_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`).
 
-3. **Verify the services:**
+4. **Verify Docker backends (optional):**
    ```bash
    docker compose ps
    ```
@@ -127,15 +139,16 @@ You can verify these settings in your Zed `settings.json` file (`cmd+,`).
 
 ## Configuration Files
 
-- **`docker-compose.yml`**: The main orchestration file. Uses environment variables for all network settings.
-- **`nginx.conf.template`**: The routing template that dynamically configures the proxy.
+- **`docker-compose.yml`**: Dockerized MCP backend services (`context7`, `github`, `e2b`).
+- **`Caddyfile`**: The routing + TLS configuration for the local proxy.
 - **`gateway/server.ts`**: Lightweight MCP aggregation service used by `/mcp` and `/registry`.
-- **`mise.toml`**: Includes `stack-up`, `stack-down`, `gateway-local`, `gateway-local-https`, and `cert-local` tasks.
+- **`pitchfork.toml`**: Daemon orchestration for `stack`, `gateway`, and `caddy`.
+- **`mise.toml`**: Includes `stack-up`, `stack-down`, `stack-status`, `gateway-local`, and `caddy-trust-ca` tasks.
 - **`e2b/http-adapter.js`**: HTTP adapter that bridges `mcp/e2b` (stdio) to `/mcp`.
-- **`.env`**: **The only place** where secrets, URLs, and port numbers are stored.
+- **`.env`**: Non-secret local configuration (ports, hostnames, timeouts).
 - **`.env.example`**: Starter defaults for local setup.
 
 ## Troubleshooting
 
 - **Port Busy**: If the `${GATEWAY_PORT}` is already in use, simply change it in the `.env` file and restart.
-- **Configuration Sync**: If you change ports in `.env`, run `mise run stack-up` to regenerate the proxy configuration.
+- **Configuration Sync**: If you change ports in `.env` or `Caddyfile`, run `mise run stack-down` then `mise run stack-up`.

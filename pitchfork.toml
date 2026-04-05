@@ -1,0 +1,12 @@
+[daemons.stack]
+run = "fnox exec --if-missing warn -- docker compose up"
+ready_delay = 2
+
+[daemons.gateway]
+run = "fnox exec --if-missing warn -- env SECRET_BACKEND=fnox MCP_UPSTREAMS=context7=http://127.0.0.1:8047/mcp,github=http://127.0.0.1:8048/mcp,e2b=http://127.0.0.1:8050/mcp GATEWAY_DB_PATH=./gateway/gateway.db bun gateway/server.ts"
+ready_http = "http://127.0.0.1:8090/health"
+
+[daemons.caddy]
+run = "mise x caddy@latest -- env XDG_DATA_HOME=./.caddy XDG_CONFIG_HOME=./.caddy caddy run --config ./Caddyfile --adapter caddyfile"
+depends = ["stack", "gateway"]
+ready_http = "http://localhost:8080/health"

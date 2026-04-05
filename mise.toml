@@ -6,6 +6,7 @@ fnox = "latest"
 gitleaks = "latest"
 lefthook = "latest"
 pitchfork = "latest"
+caddy = "latest"
 
 [hooks]
 postinstall = "lefthook install"
@@ -22,18 +23,18 @@ run = "dprint check"
 description = "Runs gateway locally using fnox secrets"
 run = "fnox exec --if-missing warn -- env SECRET_BACKEND='fnox' MCP_UPSTREAMS='context7=http://127.0.0.1:8047/mcp,github=http://127.0.0.1:8048/mcp,e2b=http://127.0.0.1:8050/mcp' GATEWAY_DB_PATH='./gateway/gateway.db' bun gateway/server.ts"
 
-[tasks.gateway-local-https]
-description = "Runs gateway locally over HTTPS with local certs"
-run = "fnox exec --if-missing warn -- env SECRET_BACKEND='fnox' PORT='8443' TLS_CERT_PATH='./.certs/localhost.pem' TLS_KEY_PATH='./.certs/localhost-key.pem' MCP_UPSTREAMS='context7=http://127.0.0.1:8047/mcp,github=http://127.0.0.1:8048/mcp,e2b=http://127.0.0.1:8050/mcp' GATEWAY_DB_PATH='./gateway/gateway.db' bun gateway/server.ts"
-
-[tasks.cert-local]
-description = "Generates local TLS certs for localhost"
-run = "mkdir -p .certs && mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1"
-
 [tasks.stack-up]
-description = "Starts MCP containers and proxy"
-run = "fnox exec --if-missing warn -- docker compose up -d context7 github e2b proxy"
+description = "Starts stack daemons via pitchfork"
+run = "pitchfork start --all"
 
 [tasks.stack-down]
-description = "Stops MCP containers and proxy"
-run = "docker compose down"
+description = "Stops stack daemons via pitchfork"
+run = "pitchfork stop --all"
+
+[tasks.stack-status]
+description = "Shows status of stack daemons"
+run = "pitchfork list"
+
+[tasks.caddy-trust-ca]
+description = "Trusts local Caddy CA in macOS keychain"
+run = "test -f ./.caddy/caddy/pki/authorities/local/root.crt || (echo 'Caddy CA not found. Run `mise run stack-up` and open https://localhost:8443 once.' && exit 1); security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain-db ./.caddy/caddy/pki/authorities/local/root.crt; sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./.caddy/caddy/pki/authorities/local/root.crt"

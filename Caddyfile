@@ -1,0 +1,25 @@
+http://localhost:{$GATEWAY_PORT:8080} {
+  reverse_proxy /health 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /mcp 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /registry 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /registry/* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /.well-known/oauth-protected-resource/mcp* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+
+  reverse_proxy /context7/* 127.0.0.1:{$CONTEXT7_EXT_PORT:8047}
+  reverse_proxy /github/* 127.0.0.1:{$GITHUB_MCP_EXT_PORT:8048}
+  reverse_proxy /e2b/* 127.0.0.1:{$E2B_MCP_EXT_PORT:8050}
+}
+
+https://localhost:{$GATEWAY_TLS_PORT:8443} {
+  tls internal
+
+  reverse_proxy /health 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /mcp 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /registry 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /registry/* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy /.well-known/oauth-protected-resource/mcp* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+
+  reverse_proxy /context7/* 127.0.0.1:{$CONTEXT7_EXT_PORT:8047}
+  reverse_proxy /github/* 127.0.0.1:{$GITHUB_MCP_EXT_PORT:8048}
+  reverse_proxy /e2b/* 127.0.0.1:{$E2B_MCP_EXT_PORT:8050}
+}
