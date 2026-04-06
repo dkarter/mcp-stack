@@ -1,6 +1,7 @@
 http://localhost:{$GATEWAY_PORT:8080} {
   reverse_proxy /health 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /mcp 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy / 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /registry 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /registry/* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /.well-known/oauth-protected-resource/mcp* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
@@ -15,6 +16,7 @@ https://localhost:{$GATEWAY_TLS_PORT:8443} {
 
   reverse_proxy /health 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /mcp 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
+  reverse_proxy / 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /registry 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /registry/* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
   reverse_proxy /.well-known/oauth-protected-resource/mcp* 127.0.0.1:{$MCP_GATEWAY_INTERNAL_PORT:8090}
